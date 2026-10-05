@@ -1,6 +1,6 @@
 /* ===== COLLECTE : uniquement sur la page « badge » =====
    endpoint = URL du script Google Apps Script (voir collecte-apps-script.gs). Vide = mode démo : rien n'est envoyé. */
-const CFG = { endpoint: '' };
+const CFG = { endpoint: 'https://script.google.com/a/macros/simplon.co/s/AKfycbw1JubMUvtAakI5OIU-KT12pQSZtBepVhD3vy5YKaxhqZVNmgSOjeDpB_lmb9cVB9C2/exec' };
 const send = o => { if (!CFG.endpoint) { console.debug('[collecte démo]', o); return } try { fetch(CFG.endpoint, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(o) }) } catch (e) { } };
 const EM = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 let RN; try { RN = new Intl.DisplayNames(['fr'], { type: 'region' }) } catch (e) { }
