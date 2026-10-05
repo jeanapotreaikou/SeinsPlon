@@ -1,4 +1,14 @@
-
+/* ===== COLLECTE : uniquement sur la page « badge » =====
+   endpoint = URL du script Google Apps Script (voir collecte-apps-script.gs). Vide = mode démo : rien n'est envoyé. */
+const CFG = { endpoint: '' };
+const send = o => { if (!CFG.endpoint) { console.debug('[collecte démo]', o); return } try { fetch(CFG.endpoint, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(o) }) } catch (e) { } };
+const EM = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+let RN; try { RN = new Intl.DisplayNames(['fr'], { type: 'region' }) } catch (e) { }
+const cname = c => c == 'XX' ? 'Autre' : (() => { try { return RN.of(c) } catch (e) { return c } })();
+const CO = sel => {
+    const L = 'AD AE AF AG AL AM AO AR AT AU AZ BA BB BD BE BF BG BH BI BN BO BR BS BT BW BY BZ CA CD CF CG CH CI CL CM CN CO CR CU CV CY CZ DE DJ DK DM DO DZ EC EE EG ER ES ET FI FJ FM FR GA GB GD GE GF GH GM GN GP GQ GR GT GW GY HK HN HR HT HU ID IE IL IN IQ IR IS IT JM JO JP KE KG KH KI KM KN KP KR KW KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MG MH MK ML MM MN MO MQ MR MT MU MV MW MX MY MZ NA NC NE NG NI NL NO NP NR NZ OM PA PE PF PG PH PK PL PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SI SK SL SM SN SO SR SS ST SV SY SZ TD TG TH TJ TL TM TN TO TR TT TV TW TZ UA UG US UY UZ VA VC VE VN VU WS XK YE YT ZA ZM ZW'.split(' ').map(c => [c, cname(c)]).sort((a, b) => a[1].localeCompare(b[1], 'fr'));
+    return [['', 'Choisis ton pays'], ['BJ', cname('BJ')], ...L, ['XX', 'Autre']].map(([c, n]) => `<option value="${c}" ${c == sel ? 'selected' : ''}>${n}</option>`).join('')
+};
 /* ===== DONNÉES (modifiables sans toucher à l'interface) ===== */
 const D = {
     q: [
@@ -34,7 +44,8 @@ const ENC = encodeURIComponent, $ = s => document.querySelector(s), app = $('#ap
 const KEY = 'mission-sein-v1';
 let S; try { S = JSON.parse(localStorage.getItem(KEY)) } catch (e) { }
 S = S || { screen: 'home', xp: 0, bd: [], qi: 0, os: 0, ps: 0, pz: [], ci: [], ii: 0, ans: { id: [] }, minor: false, started: false };
-let T = { s: 0, r: '', p: null, ch: [], open: null, f: { v: '', t: '', q: '' }, w: false, rem: null, c: '' };
+const nb = () => ({ fn: '', ln: '', em: '', cc: '', nl: false, img: null, ready: false, sent: false, err: '' });
+let T = { b: nb(), s: 0, r: '', p: null, ch: [], open: null, f: { v: '', t: '', q: '' }, w: false, rem: null, c: '' };
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { } };
 const track = (n, p) => console.debug('[analytics]', n, p || {}); /* jamais de données médicales */
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.setAttribute('role', 'status'); d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2200) }
@@ -48,7 +59,7 @@ function done(m, b, next) { xp(10); if (b) badge(b); track('mission_completed', 
 /* ===== COMPOSANTS ===== */
 const hd = () => {
     const n = M[S.screen]; if (n == null || (S.screen == 'directory' && flag())) return '';
-    return `<div class="hd" style="background:none"><div class="row"><span class="k" style="display:flex;align-items:center;gap:8px">${ic(MI[n], 22)}Mission ${n + 1}/6 · ${ST[n]}</span><span class="xp">${S.xp} XP · ${['Rookie', 'Curieuse', 'Pro', 'Légende'][Math.min(3, Math.floor(S.xp / 45))]}</span></div><div class="bar" role="progressbar" aria-label="Progression du parcours" aria-valuemin="0" aria-valuemax="6" aria-valuenow="${n}"><i style="width:${Math.round((n + .5) / 6 * 100)}%"></i></div></div>`
+    return `<div class="hd"><div class="row"><span class="k" style="display:flex;align-items:center;gap:8px">${ic(MI[n], 22)}Mission ${n + 1}/6 · ${ST[n]}</span><span class="xp">${S.xp} XP · ${['Rookie', 'Curieuse', 'Pro', 'Légende'][Math.min(3, Math.floor(S.xp / 45))]}</span></div><div class="bar" role="progressbar" aria-label="Progression du parcours" aria-valuemin="0" aria-valuemax="6" aria-valuenow="${n}"><i style="width:${Math.round((n + .5) / 6 * 100)}%"></i></div></div>`
 };
 const ft = () => `<div class="ft"><p>Information et sensibilisation : l'auto-observation ne remplace ni une consultation médicale ni les examens de dépistage recommandés.</p><p>SeinsPlon, une plateforme pensée par Simplon Bénin.</p><button data-a="to" data-v="sources">Sources médicales</button><button data-a="to" data-v="faq">FAQ</button><button data-a="reset">Recommencer</button></div>`;
 const opts = (arr, act) => `<div role="group" aria-label="Réponses">${arr.map(o => `<button class="opt" data-a="${act}" data-v="${o}">${o}</button>`).join('')}</div>`;
@@ -75,7 +86,6 @@ const IC = {
 const MI = ['bulb', 'eye', 'hand', 'cards', 'mag', 'pin'], CK = ['lump', 'thick', 'shape', 'size', 'skin', 'nip', 'drop', 'arm'], QI = ['heart', 'lump', 'lump', 'eye', 'size', 'chat', 'shield', 'arm', 'heart', 'ribbon'];
 const ic = (k, s = 24) => `<svg class="ic" viewBox="0 0 40 40" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]}</svg>`;
 const ib = k => `<span class="ib">${ic(k, 32)}</span>`;
-
 /* Illustrations : buste stylisé (0 bras bas · 1 deux bras levés · 2 un bras levé), miroir, fleurs, ruban */
 const figIn = (up, m) => { const a = up > 0, b = up == 1; return `${m ? '<clipPath id="mc"><ellipse cx="100" cy="95" rx="94" ry="90"/></clipPath><ellipse cx="100" cy="95" rx="94" ry="90" fill="var(--card)"/><g clip-path="url(#mc)">' : '<g>'}<g transform="translate(0 12)"><g stroke="var(--plum)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path fill="var(--soft)" d="M93 56Q62 58 58 84L54 190H146L142 84Q138 58 107 56z"/><path fill="none" d="${a ? 'M58 84L34 36' : 'M58 84Q42 124 38 190'}M${b ? '142 84L166 36' : '142 84Q158 124 162 190'}"/><circle cx="100" cy="28" r="18" fill="var(--soft)"/><path fill="var(--plum)" d="M82 26q2-22 18-22t18 22q-9-11-18-9t-18 9z"/><path fill="none" d="M94 44v12M106 44v12"/><circle cx="82" cy="118" r="17" fill="var(--card)"/><circle cx="118" cy="118" r="17" fill="var(--card)"/></g><circle cx="82" cy="118" r="3" fill="var(--pink)"/><circle cx="118" cy="118" r="3" fill="var(--pink)"/></g></g>${m ? '<ellipse cx="100" cy="95" rx="94" ry="90" fill="none" stroke="var(--plum)" stroke-width="5"/><path d="M34 40q8-14 24-22" stroke="var(--pink)" stroke-width="4" stroke-linecap="round" fill="none"/>' : ''}` };
 const bust = (up, m) => `<svg viewBox="0 0 200 190" role="img" aria-label="Illustration d'un buste féminin${up ? ', bras levé' : ''}${m ? ', dans un miroir' : ''}">${figIn(up, m)}</svg>`;
@@ -97,41 +107,13 @@ const mas = t => `<div class="mas"><svg viewBox="-30 -30 60 60" aria-hidden="tru
 const still = () => matchMedia('(prefers-reduced-motion:reduce)').matches;
 function burst(n) { if (still()) return; const E = ['var(--pink)', 'var(--plum)', 'var(--ok)', 'var(--soft)', 'var(--pink)']; for (let i = 0; i < n; i++) { const d = document.createElement('span'); d.className = 'sp'; d.style.background = E[i % 5]; d.setAttribute('aria-hidden', 'true'); d.style.left = '50%'; d.style.top = '45%'; const a = i / n * 6.28, k = 90 + Math.random() * 110; d.style.setProperty('--x', Math.cos(a) * k + 'px'); d.style.setProperty('--y', Math.sin(a) * k + 'px'); document.body.append(d); setTimeout(() => d.remove(), 1100) } }
 function splash(n) { if (still()) return; const d = document.createElement('div'); d.className = 'spl'; d.setAttribute('role', 'status'); d.innerHTML = `<div>${ic(MI[n], 96)}<h2>Mission ${n + 1}</h2><p>${ST[n]} · ${TG[n]}</p></div>`; d.onclick = () => d.remove(); document.body.append(d); setTimeout(() => d.remove(), 1600) }
-/* ===== BADGE (canvas 1080x1350) : fond prune très foncé + texte blanc / rose pâle (contrastes > 8:1) ===== */
-const FF = "Fredoka,Nunito,system-ui,sans-serif", RIBD = 'M0 0C-12-16-24-22-22-10c2 12 14 12 22 10zm0 0C12-16 24-22 22-10c-2 12-14 12-22 10zM0 0-12 26l8-6 4 8 4-8 8 6z';
-function drawBadge() {
-    const c = $('#bc'); if (!c) return; const x = c.getContext('2d'), W = 1080, n = (T.n || '').trim(), big = n || 'Mission accomplie';
-    const t = (s, y, sz, col, w, ls) => { x.font = `${w} ${sz}px ${FF}`; x.fillStyle = col; x.textAlign = 'center'; if ('letterSpacing' in x) x.letterSpacing = (ls || 0) + 'px'; x.fillText(s, W / 2, y); if ('letterSpacing' in x) x.letterSpacing = '0px' };
-    const star = (a, b, k) => { x.beginPath(); x.moveTo(a, b - k); x.quadraticCurveTo(a + k * .14, b - k * .14, a + k, b); x.quadraticCurveTo(a + k * .14, b + k * .14, a, b + k); x.quadraticCurveTo(a - k * .14, b + k * .14, a - k, b); x.quadraticCurveTo(a - k * .14, b - k * .14, a, b - k); x.fill() };
-    c.setAttribute('aria-label', "Badge d'ambassadrice SeinsPlon" + (n ? ' de ' + n : ''));
-    x.fillStyle = '#3A0F26'; x.fillRect(0, 0, W, 1350);
-    const g = x.createRadialGradient(W / 2, 500, 60, W / 2, 500, 640); g.addColorStop(0, '#5B1A3A'); g.addColorStop(1, '#3A0F26'); x.fillStyle = g; x.fillRect(0, 0, W, 1350);
-    x.fillStyle = '#FFC2D8'; star(150, 330, 34); star(940, 290, 26); star(920, 780, 36); star(170, 790, 24); star(980, 520, 14); star(100, 560, 16);
-    x.beginPath(); x.arc(W / 2, 500, 290, 0, 7); x.fillStyle = '#FFF7FA'; x.fill(); x.lineWidth = 14; x.strokeStyle = '#FFC2D8'; x.stroke();
-    x.beginPath(); x.arc(W / 2, 500, 250, 0, 7); x.lineWidth = 4; x.strokeStyle = '#C2255C'; x.stroke();
-    x.save(); x.translate(W / 2, 484); x.scale(6.2, 6.2); x.fillStyle = '#C2255C'; x.fill(new Path2D(RIBD)); x.restore();
-    /* logo blanc en haut */
-    x.save(); x.translate((W - 405) / 2, 50); x.scale(1.5, 1.5);
-    x.beginPath(); x.ellipse(30, 35, 25, 26, 0, 0, 7); x.fillStyle = 'rgba(255,255,255,.14)'; x.fill(); x.lineWidth = 4; x.strokeStyle = '#FFFFFF'; x.stroke();
-    for (const a of [21, 39]) { x.beginPath(); x.arc(a, 40, 9, 0, 7); x.fillStyle = 'rgba(255,255,255,.92)'; x.fill(); x.lineWidth = 3; x.strokeStyle = '#FFC2D8'; x.stroke(); x.beginPath(); x.arc(a, 40, 2.4, 0, 7); x.fillStyle = '#FFC2D8'; x.fill() }
-    x.save(); x.translate(30, 9); x.scale(.5, .5); const q = new Path2D(RIBD); x.lineWidth = 3; x.lineJoin = 'round'; x.strokeStyle = '#3A0F26'; x.stroke(q); x.fillStyle = '#FFC2D8'; x.fill(q); x.restore();
-    x.font = `600 36px ${FF}`; x.textAlign = 'left'; x.fillStyle = '#FFFFFF'; x.fillText('Seins', 72, 44); const w = x.measureText('Seins').width; x.fillStyle = '#FFC2D8'; x.fillText('Plon', 72 + w, 44); x.restore();
-    /* hiérarchie : étiquette > nom > message > pied de page */
-    t('AMBASSADRICE DE MA SANTÉ', 905, 40, '#FFC2D8', 600, 4);
-    let sz = 130; x.font = `700 ${sz}px ${FF}`; while (x.measureText(big).width > 900 && sz > 48) { sz -= 4; x.font = `700 ${sz}px ${FF}` }
-    t(big, 1030, sz, '#FFFFFF', 700);
-    x.fillStyle = '#FFC2D8'; x.fillRect(W / 2 - 60, 1068, 120, 5);
-    t("J'ai terminé ma mission santé mammaire.", 1135, 40, '#FFFFFF', 500); t('Et toi ?', 1188, 44, '#FFC2D8', 700);
-    t('Observe mieux tes seins  ·  #SeinsPlon #OctobreRose', 1262, 30, '#F1D5E0', 500); t('Une plateforme pensée par Simplon Bénin', 1306, 28, '#E2BDCD', 500);
-    if (!drawBadge.f) { drawBadge.f = 1; document.fonts && Promise.all([document.fonts.load('600 40px Fredoka'), document.fonts.load('700 40px Fredoka'), document.fonts.load('500 40px Fredoka')]).then(() => drawBadge()).catch(() => { }) }
-}
 /* ===== ÉCRANS ===== */
 const SC = {
     home() {
         const r = S.started && S.last ? `<button class="cta s" data-a="resume">REPRENDRE OÙ J'EN ÉTAIS</button>` : '';
         return `<div class="hero"><div class="brand">${logo()}<p class="tag">Observe mieux tes seins</p></div>${hero()}<h1 tabindex="-1">Et si tu prenais 5 minutes pour mieux connaître tes seins ?</h1><p>Apprends les bons réflexes, fais ton auto-observation et découvre quand demander un avis médical. Zéro prise de tête, promis !</p><p>${['Apprendre', 'Observer', 'Vérifier', 'Agir'].map((w, i) => `<span class="bd" style="animation-delay:${.3 + i * .2}s">${w}</span>`).join('')}</p>${mas("Salut ! Moi c'est Rosie, je te guide")}</div><button class="cta" data-a="start">C'EST PARTI !</button>${r}<div class="note">Ici on informe et on sensibilise : ce parcours ne permet pas de diagnostiquer une maladie. Un changement inhabituel ? Direction un professionnel de santé.</div>`
     },
-    consent() { return `<div class="top">${ib('shield')}</div><h1 tabindex="-1">Petit brief avant de jouer</h1><p>5 missions, quelques minutes, et on le fait ensemble. Easy.</p><div class="note"><b>Ce que c'est :</b> de l'information, de la sensibilisation, de l'auto-observation guidée et de l'orientation.<br><b>Ce que ce n'est pas :</b> un outil de diagnostic. Aucun résultat, aucun « risque » ne te sera donné.</div><p><b>Ta vie privée :</b> pas de nom, pas de compte. Tes réponses restent sur ton appareil et ne partent nulle part.</p><label style="display:flex;gap:10px;align-items:center;min-height:48px"><input type="checkbox" id="mn" style="width:24px;height:24px" ${S.minor ? 'checked' : ''}> Facultatif : j'ai moins de 18 ans</label><button class="cta" data-a="ok">COMPRIS, ON Y VA !</button>` },
+    consent() { return `<div class="top">${ib('shield')}</div><h1 tabindex="-1">Petit brief avant de jouer</h1><p>5 missions, quelques minutes, et on le fait ensemble. Easy.</p><div class="note"><b>Ce que c'est :</b> de l'information, de la sensibilisation, de l'auto-observation guidée et de l'orientation.<br><b>Ce que ce n'est pas :</b> un outil de diagnostic. Aucun résultat, aucun « risque » ne te sera donné.</div><p><b>Ta vie privée :</b> pas de compte. Tes réponses au parcours restent sur ton appareil et ne partent nulle part. On ne te demande des infos qu'à la toute fin, si tu choisis de créer ton badge (facultatif).</p><label style="display:flex;gap:10px;align-items:center;min-height:48px"><input type="checkbox" id="mn" style="width:24px;height:24px" ${S.minor ? 'checked' : ''}> Facultatif : j'ai moins de 18 ans</label><button class="cta" data-a="ok">COMPRIS, ON Y VA !</button>` },
     quiz() {
         const q = D.q[S.qi], p = T.p;
         return `<div class="top">${ib(QI[S.qi])}<p class="k">Question ${S.qi + 1}/${D.q.length}</p></div><h1 tabindex="-1">${q.q}</h1><div role="group" aria-label="Réponses">${q.o.map((o, i) => `<button class="opt${p != null && i == q.a ? ' right bounce' : p == i ? ' pick wob' : ''}" data-a="pick" data-v="${i}" ${p != null ? 'disabled' : ''}>${o}${p != null && i == q.a ? ' ✓' : ''}</button>`).join('')}</div>${p != null ? `${mas(T.r)}<div class="exp" id="ex" tabindex="-1">${q.e}</div><button class="cta" data-a="nextq">${S.qi + 1 < D.q.length ? 'SUIVANT' : 'TERMINER LA MISSION'}</button>` : ''}`
@@ -154,9 +136,20 @@ const SC = {
     nochange() { return `<div class="top">${ib('heart')}</div><h1 tabindex="-1">Observation terminée, bravo !</h1><div class="note">Tu as terminé ton auto-observation. Continue à connaître l'aspect et les sensations habituels de tes seins, et reste attentive à tout nouveau changement.</div><button class="cta" data-a="to" data-v="done">CONTINUER</button>${T.w ? `<div class="exp"><p>C'est tout à fait légitime. Tu peux en parler à un professionnel de santé même sans signe particulier : c'est aussi son rôle.</p></div><button class="cta s" data-a="to" data-v="directory">TROUVER UN PROFESSIONNEL DE SANTÉ</button>` : `<button class="cta s" data-a="worry">Je suis quand même inquiète</button>`}` },
     change() { const f = flag(); return `<div class="top">${ib('chat')}</div><h1 tabindex="-1">${f == 2 ? 'Tu as remarqué un changement' : 'Dans le doute, un avis est possible'}</h1><p>Un changement inhabituel mérite d'être évalué par un professionnel de santé. Ça ne veut pas forcément dire qu'il s'agit d'un cancer.</p><p>Pas besoin de chercher plus loin toute seule : un professionnel pourra t'examiner et t'expliquer.</p>${S.minor ? `<p>Tu peux en parler à un adulte de confiance, qui pourra t'accompagner.</p>` : ''}<button class="cta" data-a="to" data-v="directory">TROUVER UN PROFESSIONNEL DE SANTÉ</button><button class="cta s" data-a="to" data-v="faq">EN SAVOIR PLUS</button>` },
     directory() { return `<div class="top">${ib('pin')}<h1 tabindex="-1" style="margin:0">Trouver un professionnel</h1></div><div class="exp"><p><b>Notre conseil :</b> prends rendez-vous avec un professionnel de santé près de chez toi (médecin, gynécologue ou centre de santé). Explique-lui simplement ce que tu as remarqué, où et depuis quand : il ou elle pourra t'examiner et t'expliquer.</p></div><p class="k">Tu peux venir accompagnée d'une personne de confiance.</p><button class="cta" data-a="to" data-v="done">TERMINER MA MISSION</button>` },
-    done() { const u = location.href, tx = "J'ai terminé ma mission santé mammaire. Et toi ? #OctobreRose #SeinsPlon"; return `${party()}<h1 tabindex="-1">MISSION ACCOMPLIE</h1><p><b>Tu viens d'apprendre à mieux observer ta santé mammaire. Respect !</b></p>${mas("GG ! T'es officiellement ambassadrice")}<h2>Ton butin</h2><p>✓ J'ai appris<br>✓ J'ai observé<br>✓ J'ai vérifié<br>✓ Je sais quand demander un avis</p>${flag() ? '<div class="note">Pense à prendre rendez-vous avec un professionnel de santé pour le changement signalé.</div>' : ''}<p>${S.bd.map(b => `<span class="bd">${b}</span>`).join('')}</p><h2>Ton badge d'ambassadrice</h2><label for="bn">Ton prénom ou pseudo (facultatif)</label><input class="sel" id="bn" maxlength="24" autocomplete="off" placeholder="Ex. : Aïcha"><p class="k">Ton nom reste sur ton appareil : il sert uniquement à dessiner le badge.</p><canvas id="bc" class="badge" width="1080" height="1350" role="img" aria-label="Aperçu de ton badge d'ambassadrice SeinsPlon"></canvas><button class="cta" data-a="dl">TÉLÉCHARGER MON BADGE (PNG)</button><div class="row" style="flex-wrap:wrap"><a class="cta s" style="flex:1" target="_blank" rel="noopener" href="https://wa.me/?text=${ENC(tx + ' ' + u)}">WhatsApp</a><a class="cta s" style="flex:1" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u=${ENC(u)}">Facebook</a><a class="cta s" style="flex:1" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${ENC(tx)}&url=${ENC(u)}">X</a></div><button class="cta" data-a="copy">PARTAGER MON PARCOURS (Instagram, lien)</button><p id="cp" tabindex="-1" role="status">${T.c}</p><h2>Un rappel pour refaire le parcours ?</h2><div class="row"><button class="cta s" data-a="rem" data-v="1">Oui</button><button class="cta s" data-a="rem" data-v="0">Non</button></div>${T.rem == 1 ? '<p class="k">Noté. Version démo : aucun rappel n\'est envoyé et rien n\'est collecté.</p>' : ''}<button class="cta" data-a="to" data-v="directory">TROUVER UN CENTRE DE SANTÉ</button><button class="cta s" data-a="reset">RECOMMENCER</button>` },
+    done() { const u = location.href, tx = "J'ai terminé ma mission santé mammaire. Et toi ? #OctobreRose #SeinsPlon"; return `${party()}<h1 tabindex="-1">MISSION ACCOMPLIE</h1><p><b>Tu viens d'apprendre à mieux observer ta santé mammaire. Respect !</b></p>${mas("GG ! T'es officiellement ambassadrice")}<h2>Ton butin</h2><p>✓ J'ai appris<br>✓ J'ai observé<br>✓ J'ai vérifié<br>✓ Je sais quand demander un avis</p>${flag() ? '<div class="note">Pense à prendre rendez-vous avec un professionnel de santé pour le changement signalé.</div>' : ''}<p>${S.bd.map(b => `<span class="bd">${b}</span>`).join('')}</p><p class="bd big">AMBASSADRICE DE MA SANTÉ</p><button class="cta" data-a="to" data-v="badge">CRÉER MON BADGE D'AMBASSADRICE</button><div class="share"><div style="max-width:250px;margin-bottom:8px">${logo(1)}</div><h2>J'ai terminé ma mission santé mammaire.</h2><p>Et toi ?</p><p>Octobre Rose · SeinsPlon</p></div><div class="row" style="flex-wrap:wrap"><a class="cta s" style="flex:1" target="_blank" rel="noopener" href="https://wa.me/?text=${ENC(tx + ' ' + u)}">WhatsApp</a><a class="cta s" style="flex:1" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u=${ENC(u)}">Facebook</a><a class="cta s" style="flex:1" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${ENC(tx)}&url=${ENC(u)}">X</a></div><button class="cta" data-a="copy">PARTAGER MON PARCOURS (Instagram, lien)</button><p id="cp" tabindex="-1" role="status">${T.c}</p><h2>Un rappel pour refaire le parcours ?</h2><div class="row"><button class="cta s" data-a="rem" data-v="1">Oui</button><button class="cta s" data-a="rem" data-v="0">Non</button></div>${T.rem == 1 ? '<p class="k">Noté. Version démo : aucun rappel n\'est envoyé.</p>' : ''}<button class="cta" data-a="to" data-v="directory">TROUVER UN CENTRE DE SANTÉ</button><button class="cta s" data-a="reset">RECOMMENCER</button>` },
+    badge() {
+        const b = T.b, E = s => String(s).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+        return `<div class="top">${ib('ribbon')}</div><h1 tabindex="-1">Crée ton badge d'ambassadrice</h1><div class="note"><b>Ta vie privée :</b> ton nom et ta photo servent uniquement à fabriquer ton badge et restent sur ton appareil. Sont envoyés : ton pays (comptage par pays, sans lien avec ton nom) et, si tu le souhaites, ton e-mail pour la newsletter. Tes réponses au parcours ne sont jamais envoyées.</div>
+<label class="fld" for="fn">Prénom *</label><input class="inp" id="fn" data-f="fn" autocomplete="given-name" maxlength="30" value="${E(b.fn)}">
+<label class="fld" for="ln">Nom *</label><input class="inp" id="ln" data-f="ln" autocomplete="family-name" maxlength="30" value="${E(b.ln)}">
+<label class="fld" for="cc">Pays *</label><select class="sel" id="cc" data-f="cc">${CO(b.cc)}</select>
+<label class="fld" for="ph">Photo (facultatif)</label><input class="inp" type="file" id="ph" accept="image/*"><p class="k" id="phs" role="status">${b.img ? 'Photo ajoutée ✓' : 'Elle ne quitte pas ton appareil.'}</p>
+${S.minor ? `<div class="note">Comme tu as moins de 18 ans, on ne te demande pas d'e-mail.</div>` : `<label class="fld" for="em">E-mail (pour la newsletter)</label><input class="inp" type="email" id="em" data-f="em" autocomplete="email" maxlength="120" value="${E(b.em)}"><label class="chk"><input type="checkbox" data-f="nl" ${b.nl ? 'checked' : ''}><span>Oui, je veux recevoir la newsletter SeinsPlon. Je peux me désinscrire à tout moment.</span></label>`}
+<p class="err" id="bm" role="alert">${b.err}</p><button class="cta" data-a="bgen">${b.ready ? 'METTRE À JOUR MON BADGE' : 'CRÉER MON BADGE'}</button>
+${b.ready ? `<canvas id="bc" width="1080" height="1350" role="img" aria-label="Aperçu de ton badge d'ambassadrice"></canvas><button class="cta" data-a="bdl">TÉLÉCHARGER MON BADGE</button>` : ''}
+<button class="cta s" data-a="to" data-v="done">RETOUR</button>`},
     sources() { return `<h1 tabindex="-1">Sources médicales</h1><ul><li>Organisation mondiale de la Santé (OMS) : aide-mémoire « Cancer du sein ».</li><li>Institut national du cancer (INCa), France : informations grand public sur le cancer du sein.</li><li>Ligue contre le cancer : brochures de sensibilisation.</li></ul><div class="note">Contenus à faire valider par un comité médical local avant diffusion, et à aligner sur les recommandations nationales de dépistage.</div>${back()}` },
-    faq() { const F = [["Ce parcours peut-il dire si j'ai un cancer ?", "Non. Il informe et guide l'observation. Seul un professionnel de santé peut examiner et poser un diagnostic."], ["Une grosseur, est-ce forcément grave ?", "Non, beaucoup sont bénignes. Mais tout changement nouveau mérite un avis."], ["Mes données sont-elles envoyées ?", "Non. Aucun compte, et vos réponses restent sur votre appareil."], ["À quelle fréquence refaire l'observation ?", "Demande conseil à un professionnel de santé, qui adaptera à ta situation."]]; return `<h1 tabindex="-1">Questions fréquentes</h1>${F.map(f => `<details><summary>${f[0]}</summary><p>${f[1]}</p></details>`).join('')}${back()}` }
+    faq() { const F = [["Ce parcours peut-il dire si j'ai un cancer ?", "Non. Il informe et guide l'observation. Seul un professionnel de santé peut examiner et poser un diagnostic."], ["Une grosseur, est-ce forcément grave ?", "Non, beaucoup sont bénignes. Mais tout changement nouveau mérite un avis."], ["Mes données sont-elles envoyées ?", "Vos réponses au parcours restent sur votre appareil, sans compte. Seule la page du badge d'ambassadrice demande des infos : le pays est compté sans lien avec le nom, l'e-mail n'est envoyé que si vous cochez la newsletter, et le nom et la photo ne quittent pas votre appareil."], ["À quelle fréquence refaire l'observation ?", "Demande conseil à un professionnel de santé, qui adaptera à ta situation."]]; return `<h1 tabindex="-1">Questions fréquentes</h1>${F.map(f => `<details><summary>${f[0]}</summary><p>${f[1]}</p></details>`).join('')}${back()}` }
 };
 const back = () => `<button class="cta s" data-a="back">RETOUR</button>`;
 
@@ -166,7 +159,7 @@ const A = {
     resume() { go(S.last) },
     ok() { S.minor = $('#mn').checked; track('mission_started', { m: 1 }); go('quiz') },
     to(v) { go(v) }, back() { go(S.back || 'home') },
-    reset() { S = null; try { localStorage.removeItem(KEY) } catch (e) { } S = { screen: 'home', xp: 0, bd: [], qi: 0, os: 0, ps: 0, pz: [], ci: [], ii: 0, ans: { id: [] }, minor: false, started: false }; T.ch = []; T.open = null; T.w = false; go('home') },
+    reset() { S = null; try { localStorage.removeItem(KEY) } catch (e) { } S = { screen: 'home', xp: 0, bd: [], qi: 0, os: 0, ps: 0, pz: [], ci: [], ii: 0, ans: { id: [] }, minor: false, started: false }; T.ch = []; T.open = null; T.w = false; T.b = nb(); go('home') },
     pick(v) { const q = D.q[S.qi], ok = +v == q.a, P = a => a[Math.floor(Math.random() * a.length)]; T.p = +v; track('question_answered'); if (ok) { T.s++; xp(10); burst(10) } else T.s = 0; T.r = ok ? P(OK) + (T.s > 1 ? ` Série de ${T.s} !` : '') : P(KO); render('#ex') },
     nextq() { T.p = null; if (S.qi + 1 < D.q.length) { S.qi++; save(); render() } else done(1, 'JE SAIS', 'observe') },
     osn() { S.os++; save(); render() },
@@ -180,21 +173,41 @@ const A = {
     idn(v) { S.ans.id[S.ii] = v; if (S.ii < 4) { S.ii++; save(); render() } else { xp(10); track('mission_completed', { m: 5 }); const f = flag(); if (f) track('health_change_reported'); badge("J'AGIS"); go(f ? 'change' : 'nochange') } },
     worry() { T.w = true; render() },
     copy() { const t = "J'ai terminé ma mission santé mammaire. Et toi ? #OctobreRose #SeinsPlon " + location.href; track('share_clicked'); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => T.c = 'Copié ! Collez-le dans Instagram ou ailleurs.').catch(() => T.c = 'Copie impossible ici : utilisez les boutons de partage.').then(() => render('#cp')) },
-    rem(v) { T.rem = +v; render('#cp') },
-    async dl() {
-        await document.fonts.ready; drawBadge(); const b = await new Promise(r => $('#bc').toBlob(r, 'image/png')); if (!b) { T.c = "Impossible de générer l'image sur cet appareil."; return render('#cp') } track('share_clicked'); const fn = 'badge-seinsplon.png';
-        try { const d = await window.claude?.use('downloads'); if (d) { await d.save({ filename: fn, data: b }); T.c = 'Badge enregistré !' } else { const u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = fn; document.body.append(a); a.click(); a.remove(); T.c = "Badge prêt. S'il ne se télécharge pas, fais une capture d'écran." } }
-        catch (e) { T.c = e && e.code == 'declined' ? 'Téléchargement annulé.' : "Le téléchargement n'est pas disponible ici : fais une capture d'écran du badge." } render('#cp')
-    }
+    async bgen() {
+        const b = T.b; b.err = '';
+        if (!b.fn.trim() || !b.ln.trim()) b.err = 'Indique ton prénom et ton nom.'; else if (!b.cc) b.err = 'Choisis ton pays.'; else if (!S.minor && b.nl && !EM.test(b.em.trim())) b.err = 'Vérifie ton e-mail : il semble incomplet.';
+        if (b.err) { render('#bm'); return } b.ready = true; try { await document.fonts.load('600 80px Fredoka') } catch (e) { }
+        render('#bc'); drawBadge($('#bc'), b); track('badge_generated')
+    },
+    bdl() {
+        const b = T.b, c = $('#bc'); if (!c) return; c.toBlob(bl => { const a = document.createElement('a'); a.href = URL.createObjectURL(bl); a.download = 'badge-ambassadrice-seinsplon.png'; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000) }, 'image/png');
+        if (!b.sent) { b.sent = 1; send({ t: 'dl', c: b.cc }); if (!S.minor && b.nl && EM.test(b.em.trim())) send({ t: 'nl', e: b.em.trim() }); track('badge_downloaded') }
+    },
+    rem(v) { T.rem = +v; render('#cp') }
 };
 
 /* ===== RENDU & ÉVÈNEMENTS ===== */
 function render(f) {
     const s = SC[S.screen] ? S.screen : 'home'; if (s == 'done' && !S.fin) { S.fin = 1; save(); track('journey_completed') }
     app.innerHTML = hd() + `<section class="sc${s == 'change' ? ' sober' : ''}">${SC[s]()}</section>${s == 'change' ? '' : ft()}`;
-    if (s == 'done') { $('#bn').value = T.n || ''; drawBadge() } const e = $(f || 'h1') || app; e.focus && e.focus({ preventScroll: true })
+    const e = $(f || 'h1') || app; e.focus && e.focus({ preventScroll: true })
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b && A[b.dataset.a]) A[b.dataset.a](b.dataset.v) });
 document.addEventListener('keydown', e => { if ((e.key == 'Enter' || e.key == ' ') && e.target.matches('[role=button][data-a]')) { e.preventDefault(); e.target.dispatchEvent(new Event('click', { bubbles: true })) } });
-document.addEventListener('input', e => { if (e.target.id == 'bn') { T.n = e.target.value; drawBadge() } });
+function drawBadge(c, b) {
+    const x = c.getContext('2d'), W = 1080, H = 1350, P = '#5B1A3A', R = '#FFC2D8', F = s => `600 ${s}px Fredoka,Nunito,system-ui,sans-serif`;
+    const fit = (t, s, w) => { do { x.font = F(s); s -= 4 } while (x.measureText(t).width > w && s > 24) };
+    const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, P); g.addColorStop(1, '#8E2A5A'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.textAlign = 'center'; x.fillStyle = R; fit('OCTOBRE ROSE · SEINSPLON', 40, 900); x.fillText('OCTOBRE ROSE · SEINSPLON', W / 2, 110);
+    x.save(); x.translate(W / 2, 250); x.scale(4, 4); x.fill(new Path2D((rib.match(/d="([^"]+)"/) || [])[1] || '')); x.restore();
+    x.save(); x.beginPath(); x.arc(W / 2, 650, 220, 0, 7); x.clip();
+    if (b.img) x.drawImage(b.img, W / 2 - 220, 430, 440, 440); else { const i = ((b.fn[0] || '') + (b.ln[0] || '')).toUpperCase(); x.fillStyle = '#FCE4EC'; x.fillRect(0, 0, W, H); x.fillStyle = P; fit(i, 200, 300); x.fillText(i, W / 2, 720) }
+    x.restore(); x.lineWidth = 14; x.strokeStyle = '#fff'; x.beginPath(); x.arc(W / 2, 650, 220, 0, 7); x.stroke();
+    const n1 = b.fn.trim(), n2 = b.ln.trim().toUpperCase(); x.fillStyle = '#fff'; fit(n1, 96, 900); x.fillText(n1, W / 2, 985); x.fillStyle = R; fit(n2, 64, 900); x.fillText(n2, W / 2, 1060);
+    x.fillStyle = '#fff'; x.beginPath(); (x.roundRect || x.rect).call(x, 110, 1110, 860, 92, 46); x.fill();
+    x.fillStyle = P; const t = 'AMBASSADRICE DE MA SANTÉ'; fit(t, 46, 780); x.fillText(t, W / 2, 1172);
+    x.fillStyle = R; const p = cname(b.cc); fit(p, 40, 900); x.fillText(p, W / 2, 1255); fit('Simplon Bénin', 30, 600); x.fillText('Simplon Bénin', W / 2, 1312)
+}
+['input', 'change'].forEach(v => document.addEventListener(v, e => { const t = e.target, f = t.dataset && t.dataset.f; if (f && T.b) T.b[f] = t.type == 'checkbox' ? t.checked : t.value }));
+document.addEventListener('change', async e => { const t = e.target; if (t.id != 'ph' || !t.files[0]) return; const s = $('#phs'); try { const im = await createImageBitmap(t.files[0], { imageOrientation: 'from-image' }), c = document.createElement('canvas'); c.width = c.height = 440; const k = Math.max(440 / im.width, 440 / im.height), w = im.width * k, h = im.height * k; c.getContext('2d').drawImage(im, (440 - w) / 2, (440 - h) / 2, w, h); T.b.img = c; s.textContent = 'Photo ajoutée ✓' } catch (_) { T.b.img = null; s.textContent = "Cette photo n'a pas pu être lue. Essaie une autre image." } });
 render();
