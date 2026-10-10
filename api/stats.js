@@ -11,6 +11,7 @@ export default async function handler(req, res) {
     return res.status(200).json(await computeStats(await db()));
   } catch (e) {
     console.error('stats /stats', e);
-    return res.status(500).json({ error: 'erreur serveur' });
+    // Détail affiché seulement après vérification de la clé : aide au diagnostic.
+    return res.status(500).json({ error: 'erreur serveur', detail: String(e?.message || e).slice(0, 300) });
   }
 }
