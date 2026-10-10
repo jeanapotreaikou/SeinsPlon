@@ -4,7 +4,14 @@
   "private": true,
   "type": "module",
   "description": "SeinsPlon : plateforme d'auto-observation (Octobre Rose) et statistiques anonymes",
-  "engines": { "node": ">=20" },
-  "scripts": { "test": "NODE_ENV=test node --no-warnings test/run.mjs" },
-  "dependencies": { "@neondatabase/serverless": ">=0.10.4" }
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "NODE_ENV=test node --no-warnings test/run.mjs"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": ">=0.10.4",
+    "@vercel/analytics": "^2.0.1"
+  }
 }
