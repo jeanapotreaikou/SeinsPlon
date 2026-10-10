@@ -182,6 +182,40 @@ const SC = {
     faq() { const F = [["Ce parcours peut-il dire si j'ai un cancer ?", "Non. Il informe et guide l'observation. Seul un professionnel de santé peut examiner et poser un diagnostic."], ["Une grosseur, est-ce forcément grave ?", "Non, beaucoup sont bénignes. Mais tout changement nouveau mérite un avis."], ["Mes données sont-elles envoyées ?", "Tes réponses de santé : jamais, elles restent sur ton appareil. Nous comptons de façon anonyme les parcours commencés et terminés et les badges téléchargés. Si tu télécharges ton badge, Simplon Bénin enregistre ton prénom, ton pays et ton e-mail avec ton accord. Les personnes de moins de 18 ans ne donnent aucune information."], ["À quelle fréquence refaire l'observation ?", "Demande conseil à un professionnel de santé, qui adaptera à ta situation."]]; return `<h1 tabindex="-1">Questions fréquentes</h1>${F.map(f => `<details><summary>${f[0]}</summary><p>${f[1]}</p></details>`).join('')}${back()}` }
 };
 
+/* ===== ACTIONS ===== */
+const A={
+start(){S.started=true;S.jid=S.jid||uid();track('journey_started');go('consent')},
+resume(){go(S.last)},
+ok(){S.minor=$('#mn').checked;track('mission_started',{m:1});go('quiz')},
+to(v){go(v)},back(){go(S.back||'home')},
+reset(){S=null;try{localStorage.removeItem(KEY)}catch(e){}S={screen:'home',xp:0,bd:[],qi:0,os:0,ps:0,pz:[],ci:[],ii:0,ans:{id:[]},minor:false,started:false};T.ch=[];T.open=null;T.w=false;go('home')},
+pick(v){const q=D.q[S.qi],ok=+v==q.a,P=a=>a[Math.floor(Math.random()*a.length)];T.p=+v;track('question_answered');if(ok){T.s++;xp(10);burst(10)}else T.s=0;T.r=ok?P(OK)+(T.s>1?` Série de ${T.s} !`:''):P(KO);render('#ex')},
+nextq(){T.p=null;if(S.qi+1<D.q.length){S.qi++;save();render()}else done(1,'JE SAIS','observe')},
+osn(){S.os++;save();render()},
+chip(v){T.ch=T.ch.includes(v)?T.ch.filter(x=>x!=v):[...T.ch,v];render('[aria-pressed]')},
+obs(v){S.ans.obs=v;done(2,"J'OBSERVE",S.minor?'cards':'palpate')},
+psn(){S.ps++;save();render()},
+zone(v){v=+v;if(!S.pz.includes(v)){S.pz.push(v);save();if(S.pz.length==9){xp(20);badge('JE VÉRIFIE');track('mission_completed',{m:3})}}render()},
+pdone(){go('cards')},
+card(v){v=+v;T.open=T.open==v?null:v;if(!S.ci.includes(v))S.ci.push(v);save();render('[aria-expanded=true]')},
+cdone(){done(4,null,'identify')},
+idn(v){S.ans.id[S.ii]=v;if(S.ii<4){S.ii++;save();render()}else{xp(10);track('mission_completed',{m:5});const f=flag();if(f)track('health_change_reported');badge("J'AGIS");go(f?'change':'nochange')}},
+worry(){T.w=true;render()},
+copy(){const t="J'ai terminé ma mission santé mammaire. Et toi ? #OctobreRose #SeinsPlon "+location.href;track('share_clicked');(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>T.c='Copié ! Collez-le dans Instagram ou ailleurs.').catch(()=>T.c='Copie impossible ici : utilisez les boutons de partage.').then(()=>render('#cp'))},
+rem(v){T.rem=+v;render('#cp')},
+dl(){if(T.busy)return;T.busy=1;return A.dl0().finally(()=>{T.busy=0})},
+async dl0(){
+const n=(T.n||'').trim(),cy=(T.cy||'').trim(),em=(T.em||'').trim(),envoi=!!STATS_URL&&!S.minor;
+const bad=S.minor?null:(FORM.nom&&!n)?['bn','Dis-nous ton prénom ou ton pseudo.']:(FORM.pays&&!cy)?['bp','Indique ton pays.']:((FORM.email&&!em)||(em&&!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)))?['bm','Vérifie ton adresse e-mail.']:(envoi&&!T.ck)?['bk',"Coche la case pour accepter l'enregistrement de tes informations."]:null;
+if(bad){T.err=bad[1];return render('#'+bad[0])}
+T.err='';let saved=true;
+if(envoi){if(!S.jid){S.jid=uid();save()}
+try{const r=await fetch(STATS_URL.replace(/\/$/,'')+'/p',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({v:VID,j:S.jid,nom:n,pays:cy,email:em,consent:true})});if(!r.ok)throw 0}catch(e){saved=false}}
+await document.fonts.ready;drawBadge();const b=await new Promise(r=>$('#bc').toBlob(r,'image/png'));if(!b){T.c="Impossible de générer l'image sur cet appareil.";return render('#cp')}const fn='badge-seinsplon.png';
+try{const d=await window.claude?.use('downloads');if(d){await d.save({filename:fn,data:b});track('badge_downloaded');T.c='Badge enregistré !'}else{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=fn;document.body.append(a);a.click();a.remove();track('badge_downloaded');T.c="Badge prêt. S'il ne se télécharge pas, fais une capture d'écran."}}
+catch(e){T.c=e&&e.code=='declined'?'Téléchargement annulé.':"Le téléchargement n'est pas disponible ici : fais une capture d'écran du badge."}if(!saved)T.err="Ton badge est prêt, mais l'enregistrement de tes informations a échoué. Tu peux réessayer plus tard.";render('#cp')}
+};
+
 /* ===== RENDU & ÉVÈNEMENTS ===== */
 function render(f) {
     const s = SC[S.screen] ? S.screen : 'home'; if (s == 'done' && !S.fin) { S.fin = 1; save(); track('journey_completed') }
