@@ -1,3 +1,6 @@
+/* ===== VERCEL WEB ANALYTICS ===== */
+import { inject } from '@vercel/analytics';
+inject();
 
 /* ===== DONNÉES (modifiables sans toucher à l'interface) ===== */
 const D = {
